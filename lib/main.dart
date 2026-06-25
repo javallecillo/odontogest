@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'dashboard.dart';
 
 void main() {
   runApp(const MyApp());
@@ -15,10 +16,12 @@ class MyApp extends StatelessWidget {
       title: 'OdontoGest',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xffF8FCED), // Fondo crema general
       ),
-      home: const LoginScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LoginScreen(),
+      },
     );
   }
 }
@@ -31,20 +34,16 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controladores para capturar el texto de los inputs
-  final TextEditingController _usuarioController = TextEditingController();
-  final TextEditingController _contrasenaController = TextEditingController();
-  
+  final TextEditingController _userController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // Función principal que conectará con tu API en Laragon
   Future<void> _conectarLogin() async {
-    final String usuario = _usuarioController.text.trim();
-    final String contrasena = _contrasenaController.text;
+    String usuario = _userController.text.trim();
+    String contrasena = _passwordController.text.trim();
 
-    // Validación básica en el cliente
     if (usuario.isEmpty || contrasena.isEmpty) {
-      _mostrarAlerta("Por favor, llena todos los campos.");
+      _mostrarAlerta("Por favor, llena todos los campos");
       return;
     }
 
@@ -52,11 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // REGLA DE ORO: 10.0.2.2 apunta al localhost de tu PC desde el emulador de Android
-    //final url = Uri.parse('http://10.0.2.2:8080/odontogest-api/login.php');
-    final url = Uri.parse('http://localhost:8080/odontogest-api/login.php');
-
     try {
+      // URL optimizada para pruebas en el navegador web
+      final url = Uri.parse('http://localhost:8080/odontogest-api/login.php');
+
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -69,100 +67,271 @@ class _LoginScreenState extends State<LoginScreen> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
-        // Autenticación Exitosa
         String nombreRol = data['usuario']['rol'];
-        _mostrarAlerta("¡Bienvenido! Rol: $nombreRol", esExito: true);
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).clearSnackBars();
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DashboardScreen(rolUsuario: nombreRol),
+          ),
+        );
       } else {
-        // Credenciales incorrectas o error devuelto por la API
         String mensajeError = data['error'] ?? "Error desconocido.";
         _mostrarAlerta(mensajeError);
       }
     } catch (e) {
-      // Error si no encuentra el servidor de Laragon
       _mostrarAlerta("No se pudo conectar al servidor. Verifica que Laragon esté encendido.");
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   void _mostrarAlerta(String mensaje, {bool esExito = false}) {
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(mensaje),
+        content: Text(mensaje, textAlign: TextAlign.center),
         backgroundColor: esExito ? Colors.green : Colors.red,
         duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final esHorizontal = size.width > size.height;
+
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.local_hospital, size: 80, color: Colors.blue),
-              const SizedBox(height: 16),
-              const Text(
-                'Clínica Ortonova',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blueGrey),
-              ),
-              const Text('Sistema OdontoGest', style: TextStyle(color: Colors.grey)),
-              const SizedBox(height: 32),
-              
-              // Input de Usuario
-              TextField(
-                controller: _usuarioController,
-                decoration: InputDecoration(
-                  labelText: 'Usuario',
-                  prefixIcon: const Icon(Icons.person),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: Colors.white,
+      backgroundColor: const Color(0xffF8FCED), // Mantiene el fondo crema limpio de base
+      resizeToAvoidBottomInset: true, 
+      body: SafeArea(
+        top: false, 
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
                 ),
-              ),
-              const SizedBox(height: 16),
-              
-              // Input de Contraseña
-              TextField(
-                controller: _contrasenaController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Contraseña',
-                  prefixIcon: const Icon(Icons.lock),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Botón de Ingresar con validador de carga
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _conectarLogin,
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      // 1. Encabezado Azul Ortonova con Arco Adaptativo Inteligente
+                      ClipPath(
+                        clipper: ArcoFigmaClipper(esHorizontal: esHorizontal),
+                        child: Container(
+                          width: size.width,
+                          // Ajuste dinámico de la altura del fondo para que no asfixie al logo
+                          height: esHorizontal ? size.height * 0.52 : size.height * 0.38,
+                          color: const Color(0xff2F405A),
+                          child: SafeArea(
+                            bottom: false,
+                            child: Center(
+                              child: Padding(
+                                // Distribución de aire equilibrada: más espacio abajo para que no choque con la curva
+                                padding: EdgeInsets.only(
+                                  left: 24.0, 
+                                  right: 24.0, 
+                                  top: esHorizontal ? 10.0 : 20.0, 
+                                  bottom: esHorizontal ? 35.0 : 100.0
+                                ),
+                                child: Image.asset(
+                                  'assets/logo_ortonova.png',
+                                  // Escala proporcional perfecta en ambas orientaciones
+                                  height: esHorizontal ? size.height * 0.28 : size.height * 0.19,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // 2. Formulario inferior
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: esHorizontal ? size.width * 0.15 : 40.0, 
+                            vertical: esHorizontal ? 10.0 : 20.0
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                'Inicio de Sesión',
+                                style: TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xff2F405A),
+                                ),
+                              ),
+                              SizedBox(height: esHorizontal ? 15 : 25),
+
+                              // Campo de Usuario
+                              _buildTextField(
+                                controlador: _userController,
+                                etiqueta: 'Usuario:',
+                                ocultar: false,
+                              ),
+                              const SizedBox(height: 22),
+
+                              // Campo de Contraseña
+                              _buildTextField(
+                                controlador: _passwordController,
+                                etiqueta: 'Contraseña:',
+                                ocultar: true,
+                              ),
+                              SizedBox(height: esHorizontal ? 20 : 35),
+
+                              // Botón Ingresar
+                              SizedBox(
+                                width: esHorizontal ? size.width * 0.35 : size.width * 0.60,
+                                height: 48,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _conectarLogin,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xff2F405A),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    elevation: 2,
+                                  ),
+                                  child: _isLoading
+                                      ? const CircularProgressIndicator(color: Color(0xffF8FCED))
+                                      : const Text(
+                                          'Ingresar',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xffF8FCED),
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              
+                              if (!esHorizontal) const Spacer(),
+                              const SizedBox(height: 25),
+
+                              // Pie de página comercial
+                              Text(
+                                'OdontoGest Mobile Suite - Versión 1.0.0',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: const Color(0xff2F405A).withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Ingresar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
+  }  
+  // Widget reutilizable para mantener los inputs idénticos al Figma (CORREGIDO: con const optimizado y withValues)
+  Widget _buildTextField({
+    required TextEditingController controlador,
+    required String etiqueta,
+    required bool ocultar,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          etiqueta,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xff2F405A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05), // Formato moderno para Flutter 3.44+
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: controlador,
+            obscureText: ocultar,
+            cursorColor: const Color(0xff2F405A),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xffFFFFFF), // Relleno Blanco
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(
+                  color: const Color(0xffE6ABAA).withValues(alpha: 0.60), // Rosa con 60% opacidad en formato moderno
+                  width: 1.5,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: const BorderSide(
+                  color: Color(0xff2F405A), // Azul al enfocar
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Recortador personalizado adaptativo al giro de pantalla
+class ArcoFigmaClipper extends CustomClipper<Path> {
+  final bool esHorizontal;
+
+  ArcoFigmaClipper({required this.esHorizontal});
+
+  @override
+  Path getClip(Size size) {
+    Path path = Path();
+    
+    // Si la pantalla es horizontal, suavizamos la altura del arco para ganar espacio vertical
+    double alturaArcoEfectiva = esHorizontal ? 30.0 : 50.0;
+    double profundidadPuntoControl = esHorizontal ? 65.0 : 110.0;
+
+    // Trazamos el inicio izquierdo
+    path.lineTo(0, size.height - alturaArcoEfectiva);
+
+    // Puntos para generar la curva cóncava perfecta hacia arriba
+    var puntoControl = Offset(size.width / 2, size.height - profundidadPuntoControl);
+    var puntoDestino = Offset(size.width, size.height - alturaArcoEfectiva);
+
+    path.quadraticBezierTo(puntoControl.dx, puntoControl.dy, puntoDestino.dx, puntoDestino.dy);
+    
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant ArcoFigmaClipper oldClipper) {
+    return oldClipper.esHorizontal != esHorizontal;
   }
 }
